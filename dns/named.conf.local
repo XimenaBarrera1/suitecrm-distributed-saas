@@ -1,0 +1,9 @@
+zone "clientea.com" {
+    type master;
+    file "/etc/bind/zones/db.clientea.com";
+};
+
+zone "clienteb.com" {
+    type master;
+    file "/etc/bind/zones/db.clienteb.com";
+};
