@@ -4,7 +4,7 @@ Proyecto final de Sistemas Distribuidos.
 
 ## Objetivo
 
-Desplegar SuiteCRM Community 7.15.1 como una plataforma SaaS multi-instancia por cliente, usando contenedores, máquinas virtuales, DNS, firewall, proxy reverso, balanceadores, clúster de base de datos y broker de mensajes.
+Desplegar SuiteCRM Community 7.15.1 como una plataforma SaaS multi-instancia por cliente, usando contenedores, máquinas virtuales, DNS, firewall, proxy revers, balanceadores, clúster de base de datos y broker de mensajes.
 
 ## Línea base técnica
 
