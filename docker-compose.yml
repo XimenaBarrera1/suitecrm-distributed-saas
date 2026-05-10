@@ -1,11 +1,66 @@
-version: '3.8'
-
 services:
+  dns:
+    image: internetsystemsconsortium/bind9:9.18
+    container_name: dns
+    ports:
+      - "${DNS_IP}:53:53/udp"
+      - "${DNS_IP}:53:53/tcp"
+    volumes:
+      - ./dns/named.conf:/etc/bind/named.conf:ro
+      - ./dns/named.conf.options:/etc/bind/named.conf.options:ro
+      - ./dns/named.conf.local:/etc/bind/named.conf.local:ro
+      - ./dns/zones:/etc/bind/zones:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.2
+    restart: unless-stopped
+
   reverse-proxy:
     image: nginx:1.27-alpine
     container_name: reverse-proxy
     ports:
-      - "80:80"
+      - "${ENTRYPOINT_IP}:80:80/tcp"
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.5
     restart: unless-stopped
+    depends_on:
+      - dns
+  lb-cliente-a:
+    image: nginx:1.27-alpine
+    container_name: lb-cliente-a
+    volumes:
+      - ./proxy/test-backends/clientea:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.6
+    restart: unless-stopped
+
+  lb-cliente-b:
+    image: nginx:1.27-alpine
+    container_name: lb-cliente-b
+    volumes:
+      - ./proxy/test-backends/clienteb:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.7
+    restart: unless-stopped
+
+networks:
+  dmz_net:
+    name: dmz_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.254
+
+  internal_net:
+    name: internal_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.2.0/24
+          gateway: 192.168.2.254
