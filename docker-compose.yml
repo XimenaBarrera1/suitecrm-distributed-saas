@@ -28,24 +28,71 @@ services:
     restart: unless-stopped
     depends_on:
       - dns
+      
   lb-cliente-a:
-    image: nginx:1.27-alpine
+    image: haproxy:2.9-alpine
     container_name: lb-cliente-a
     volumes:
-      - ./proxy/test-backends/clientea:/usr/share/nginx/html:ro
+      - ./load-balancers/haproxy-cliente-a.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     networks:
       dmz_net:
         ipv4_address: 192.168.1.6
     restart: unless-stopped
+    depends_on:
+      - suitecrm-a1
+      - suitecrm-a2
 
   lb-cliente-b:
-    image: nginx:1.27-alpine
+    image: haproxy:2.9-alpine
     container_name: lb-cliente-b
     volumes:
-      - ./proxy/test-backends/clienteb:/usr/share/nginx/html:ro
+      - ./load-balancers/haproxy-cliente-b.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     networks:
       dmz_net:
         ipv4_address: 192.168.1.7
+    restart: unless-stopped
+    depends_on:
+      - suitecrm-b1
+      - suitecrm-b2
+
+  suitecrm-a1:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-a1
+    volumes:
+      - ./apps/mock-suitecrm/clientea1:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.11
+    restart: unless-stopped
+
+  suitecrm-a2:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-a2
+    volumes:
+      - ./apps/mock-suitecrm/clientea2:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.12
+    restart: unless-stopped
+
+  suitecrm-b1:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-b1
+    volumes:
+      - ./apps/mock-suitecrm/clienteb1:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.21
+    restart: unless-stopped
+
+  suitecrm-b2:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-b2
+    volumes:
+      - ./apps/mock-suitecrm/clienteb2:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.22
     restart: unless-stopped
 
 networks:
