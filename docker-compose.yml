@@ -94,6 +94,68 @@ services:
       dmz_net:
         ipv4_address: 192.168.1.22
     restart: unless-stopped
+  db-node-1:
+    image: mariadb:10.11
+    container_name: db-node-1
+    command:
+      - --wsrep-new-cluster
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+      MARIADB_DATABASE: suitecrm_clientea
+      MARIADB_USER: suitecrm_user
+      MARIADB_PASSWORD: suitecrm_password
+    volumes:
+      - db_node_1_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./database/galera/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.11
+    restart: unless-stopped
+
+  db-node-2:
+    image: mariadb:10.11
+    container_name: db-node-2
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+    volumes:
+      - db_node_2_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.12
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+
+  db-node-3:
+    image: mariadb:10.11
+    container_name: db-node-3
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+    volumes:
+      - db_node_3_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.13
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+
+  db-lb:
+    image: haproxy:2.9-alpine
+    container_name: db-lb
+    volumes:
+      - ./database/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.1
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+      - db-node-2
+      - db-node-3
 
 networks:
   dmz_net:
@@ -111,3 +173,7 @@ networks:
       config:
         - subnet: 192.168.2.0/24
           gateway: 192.168.2.254
+volumes:
+  db_node_1_data:
+  db_node_2_data:
+  db_node_3_data:
