@@ -1,0 +1,166 @@
+services:
+  dns:
+    image: internetsystemsconsortium/bind9:9.18
+    container_name: dns
+    ports:
+      - "${DNS_IP}:53:53/udp"
+      - "${DNS_IP}:53:53/tcp"
+    volumes:
+      - ./dns/named.conf:/etc/bind/named.conf:ro
+      - ./dns/named.conf.options:/etc/bind/named.conf.options:ro
+      - ./dns/named.conf.local:/etc/bind/named.conf.local:ro
+      - ./dns/zones:/etc/bind/zones:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.2
+    restart: unless-stopped
+
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: reverse-proxy
+    ports:
+      - "${ENTRYPOINT_IP}:80:80/tcp"
+    volumes:
+      - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.5
+    restart: unless-stopped
+    depends_on:
+      - dns
+
+  lb-cliente-a:
+    image: haproxy:2.9-alpine
+    container_name: lb-cliente-a
+    volumes:
+      - ./load-balancers/haproxy-cliente-a.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.6
+    restart: unless-stopped
+    depends_on:
+      - suitecrm-a1
+      - suitecrm-a2
+
+  lb-cliente-b:
+    image: haproxy:2.9-alpine
+    container_name: lb-cliente-b
+    volumes:
+      - ./load-balancers/haproxy-cliente-b.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.7
+    restart: unless-stopped
+    depends_on:
+      - suitecrm-b1
+      - suitecrm-b2
+
+  suitecrm-a1:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-a1
+    volumes:
+      - ./apps/mock-suitecrm/clientea1:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.11
+    restart: unless-stopped
+
+  suitecrm-a2:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-a2
+    volumes:
+      - ./apps/mock-suitecrm/clientea2:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.12
+    restart: unless-stopped
+
+  suitecrm-b1:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-b1
+    volumes:
+      - ./apps/mock-suitecrm/clienteb1:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.21
+    restart: unless-stopped
+
+  suitecrm-b2:
+    image: nginx:1.27-alpine
+    container_name: suitecrm-b2
+    volumes:
+      - ./apps/mock-suitecrm/clienteb2:/usr/share/nginx/html:ro
+    networks:
+      dmz_net:
+        ipv4_address: 192.168.1.22
+    restart: unless-stopped
+
+  # Broker de mensajes RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: suitecrm_user
+      RABBITMQ_DEFAULT_PASS: suitecrm_pass
+      RABBITMQ_DEFAULT_VHOST: suitecrm_vhost
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.30
+    restart: unless-stopped
+
+  # MailHog (servidor SMTP falso)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.35
+    restart: unless-stopped
+
+  # Consumidor de eventos en Python
+  consumer:
+    build: ./consumer
+    container_name: consumer
+    environment:
+      RABBITMQ_HOST: 192.168.2.30
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: suitecrm_user
+      RABBITMQ_PASS: suitecrm_pass
+      RABBITMQ_VHOST: suitecrm_vhost
+      SMTP_HOST: 192.168.2.35
+      SMTP_PORT: 1025
+      SMTP_FROM: no-reply@suitecrm.com
+    depends_on:
+      - rabbitmq
+      - mailhog
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.36
+    restart: unless-stopped
+
+networks:
+  dmz_net:
+    name: dmz_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.254
+  internal_net:
+    name: internal_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.2.0/24
+          gateway: 192.168.2.254
+
+volumes:
+  rabbitmq_data:
