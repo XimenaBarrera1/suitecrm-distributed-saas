@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     depends_on:
       - dns
-      
+
   lb-cliente-a:
     image: haproxy:2.9-alpine
     container_name: lb-cliente-a
@@ -54,23 +54,79 @@ services:
     depends_on:
       - suitecrm-b1
       - suitecrm-b2
-  
-  mariadb-temporal:
+
+  db-node-1:
     image: mariadb:10.11
-    container_name: mariadb-temporal
+    container_name: db-node-1
+    command:
+      - --wsrep-new-cluster
     environment:
-      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_ROOT_PASSWORD: root_password
       MARIADB_DATABASE: suitecrm_clientea
       MARIADB_USER: suitecrm_user
       MARIADB_PASSWORD: suitecrm_pass
     volumes:
-      - mariadb_temporal_data:/var/lib/mysql
-      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - db_node_1_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./database/galera/init:/docker-entrypoint-initdb.d:ro
     networks:
       internal_net:
         ipv4_address: 192.168.2.11
-        aliases:
-          - db-lb
+    restart: unless-stopped
+
+  db-node-2:
+    image: mariadb:10.11
+    container_name: db-node-2
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+    volumes:
+      - db_node_2_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.12
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+
+  db-node-3:
+    image: mariadb:10.11
+    container_name: db-node-3
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+    volumes:
+      - db_node_3_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.13
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+
+  db-lb:
+    image: haproxy:2.9-alpine
+    container_name: db-lb
+    volumes:
+      - ./database/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.10
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+      - db-node-2
+      - db-node-3
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.20
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
 
   suitecrm-a1:
@@ -94,7 +150,7 @@ services:
         ipv4_address: 192.168.2.101
     restart: unless-stopped
     depends_on:
-      - mariadb-temporal
+      - db-lb
       - redis
 
   suitecrm-a2:
@@ -116,7 +172,7 @@ services:
         ipv4_address: 192.168.2.102
     restart: unless-stopped
     depends_on:
-      - mariadb-temporal
+      - db-lb
       - redis
 
   suitecrm-b1:
@@ -138,7 +194,7 @@ services:
         ipv4_address: 192.168.2.201
     restart: unless-stopped
     depends_on:
-      - mariadb-temporal
+      - db-lb
       - redis
 
   suitecrm-b2:
@@ -160,20 +216,8 @@ services:
         ipv4_address: 192.168.2.202
     restart: unless-stopped
     depends_on:
-      - mariadb-temporal
+      - db-lb
       - redis
-    
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    command: ["redis-server", "--appendonly", "yes"]
-    networks:
-      internal_net:
-        ipv4_address: 192.168.2.20
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    
 
 networks:
   dmz_net:
@@ -183,7 +227,6 @@ networks:
       config:
         - subnet: 192.168.1.0/24
           gateway: 192.168.1.254
-  
 
   internal_net:
     name: internal_net
@@ -192,9 +235,11 @@ networks:
       config:
         - subnet: 192.168.2.0/24
           gateway: 192.168.2.254
-        
+
 volumes:
-  mariadb_temporal_data:
+  db_node_1_data:
+  db_node_2_data:
+  db_node_3_data:
   redis_data:
   suitecrm_clientea_app:
   suitecrm_clienteb_app:
