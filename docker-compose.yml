@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     depends_on:
       - dns
-      
+
   lb-cliente-a:
     image: haproxy:2.9-alpine
     container_name: lb-cliente-a
@@ -55,45 +55,169 @@ services:
       - suitecrm-b1
       - suitecrm-b2
 
-  suitecrm-a1:
-    image: nginx:1.27-alpine
-    container_name: suitecrm-a1
+  db-node-1:
+    image: mariadb:10.11
+    container_name: db-node-1
+    command:
+      - --wsrep-new-cluster
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+      MARIADB_DATABASE: suitecrm_clientea
+      MARIADB_USER: suitecrm_user
+      MARIADB_PASSWORD: suitecrm_pass
     volumes:
-      - ./apps/mock-suitecrm/clientea1:/usr/share/nginx/html:ro
+      - db_node_1_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./database/galera/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.11
+    restart: unless-stopped
+
+  db-node-2:
+    image: mariadb:10.11
+    container_name: db-node-2
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+    volumes:
+      - db_node_2_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.12
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+
+  db-node-3:
+    image: mariadb:10.11
+    container_name: db-node-3
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+    volumes:
+      - db_node_3_data:/var/lib/mysql
+      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.13
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+
+  db-lb:
+    image: haproxy:2.9-alpine
+    container_name: db-lb
+    volumes:
+      - ./database/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.10
+    restart: unless-stopped
+    depends_on:
+      - db-node-1
+      - db-node-2
+      - db-node-3
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.20
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  suitecrm-a1:
+    build:
+      context: ./apps/suitecrm
+    image: suitecrm-app:7.15.1
+    container_name: suitecrm-a1
+    environment:
+      SUITECRM_CLIENT: clientea
+      DB_HOST: db-lb
+      DB_NAME: suitecrm_clientea
+      DB_USER: suitecrm_user
+      DB_PASSWORD: suitecrm_pass
+      REDIS_HOST: redis
+    volumes:
+      - suitecrm_clientea_app:/var/www/html
     networks:
       dmz_net:
         ipv4_address: 192.168.1.11
+      internal_net:
+        ipv4_address: 192.168.2.101
     restart: unless-stopped
+    depends_on:
+      - db-lb
+      - redis
 
   suitecrm-a2:
-    image: nginx:1.27-alpine
+    image: suitecrm-app:7.15.1
     container_name: suitecrm-a2
+    environment:
+      SUITECRM_CLIENT: clientea
+      DB_HOST: db-lb
+      DB_NAME: suitecrm_clientea
+      DB_USER: suitecrm_user
+      DB_PASSWORD: suitecrm_pass
+      REDIS_HOST: redis
     volumes:
-      - ./apps/mock-suitecrm/clientea2:/usr/share/nginx/html:ro
+      - suitecrm_clientea_app:/var/www/html
     networks:
       dmz_net:
         ipv4_address: 192.168.1.12
+      internal_net:
+        ipv4_address: 192.168.2.102
     restart: unless-stopped
+    depends_on:
+      - db-lb
+      - redis
 
   suitecrm-b1:
-    image: nginx:1.27-alpine
+    image: suitecrm-app:7.15.1
     container_name: suitecrm-b1
+    environment:
+      SUITECRM_CLIENT: clienteb
+      DB_HOST: db-lb
+      DB_NAME: suitecrm_clienteb
+      DB_USER: suitecrm_user
+      DB_PASSWORD: suitecrm_pass
+      REDIS_HOST: redis
     volumes:
-      - ./apps/mock-suitecrm/clienteb1:/usr/share/nginx/html:ro
+      - suitecrm_clienteb_app:/var/www/html
     networks:
       dmz_net:
         ipv4_address: 192.168.1.21
+      internal_net:
+        ipv4_address: 192.168.2.201
     restart: unless-stopped
+    depends_on:
+      - db-lb
+      - redis
 
   suitecrm-b2:
-    image: nginx:1.27-alpine
+    image: suitecrm-app:7.15.1
     container_name: suitecrm-b2
+    environment:
+      SUITECRM_CLIENT: clienteb
+      DB_HOST: db-lb
+      DB_NAME: suitecrm_clienteb
+      DB_USER: suitecrm_user
+      DB_PASSWORD: suitecrm_pass
+      REDIS_HOST: redis
     volumes:
-      - ./apps/mock-suitecrm/clienteb2:/usr/share/nginx/html:ro
+      - suitecrm_clienteb_app:/var/www/html
     networks:
       dmz_net:
         ipv4_address: 192.168.1.22
+      internal_net:
+        ipv4_address: 192.168.2.202
     restart: unless-stopped
+    depends_on:
+      - db-lb
+      - redis
 
 networks:
   dmz_net:
@@ -111,3 +235,11 @@ networks:
       config:
         - subnet: 192.168.2.0/24
           gateway: 192.168.2.254
+
+volumes:
+  db_node_1_data:
+  db_node_2_data:
+  db_node_3_data:
+  redis_data:
+  suitecrm_clientea_app:
+  suitecrm_clienteb_app:

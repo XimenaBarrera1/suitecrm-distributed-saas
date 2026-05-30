@@ -1,0 +1,22 @@
+[mysqld]
+bind-address=0.0.0.0
+
+# Galera
+wsrep_on=ON
+wsrep_provider=/usr/lib/galera/libgalera_smm.so
+wsrep_cluster_name="suitecrm_galera_cluster"
+wsrep_cluster_address="gcomm://db-node-1,db-node-2,db-node-3"
+
+# SST
+wsrep_sst_method=rsync
+
+# Replication format required by Galera
+binlog_format=ROW
+default_storage_engine=InnoDB
+innodb_autoinc_lock_mode=2
+
+# Network ports
+port=3306
+
+# Basic compatibility
+skip-name-resolve
