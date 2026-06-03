@@ -58,8 +58,10 @@ services:
   db-node-1:
     image: mariadb:10.11
     container_name: db-node-1
-    command:
-      - --wsrep-new-cluster
+    hostname: db-node-1
+    #command:
+   # - mysqld
+    #- --wsrep-new-cluster
     environment:
       MARIADB_ROOT_PASSWORD: root_password
       MARIADB_DATABASE: suitecrm_clientea
@@ -67,7 +69,7 @@ services:
       MARIADB_PASSWORD: suitecrm_pass
     volumes:
       - db_node_1_data:/var/lib/mysql
-      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./database/galera/conf/galera-node1.cnf:/etc/mysql/conf.d/galera.cnf:ro
       - ./database/galera/init:/docker-entrypoint-initdb.d:ro
     networks:
       internal_net:
@@ -77,11 +79,12 @@ services:
   db-node-2:
     image: mariadb:10.11
     container_name: db-node-2
+    hostname: db-node-2
     environment:
       MARIADB_ROOT_PASSWORD: root_password
     volumes:
       - db_node_2_data:/var/lib/mysql
-      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./database/galera/conf/galera-node2.cnf:/etc/mysql/conf.d/galera.cnf:ro
     networks:
       internal_net:
         ipv4_address: 192.168.2.12
@@ -92,11 +95,12 @@ services:
   db-node-3:
     image: mariadb:10.11
     container_name: db-node-3
+    hostname: db-node-3
     environment:
       MARIADB_ROOT_PASSWORD: root_password
     volumes:
       - db_node_3_data:/var/lib/mysql
-      - ./database/galera/conf/galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./database/galera/conf/galera-node3.cnf:/etc/mysql/conf.d/galera.cnf:ro
     networks:
       internal_net:
         ipv4_address: 192.168.2.13

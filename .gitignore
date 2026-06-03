@@ -7,3 +7,4 @@ dns/zones/db.clienteb.com
 *.tmp
 .DS_Store
 .vscode/
+*.bak
