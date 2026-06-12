@@ -240,6 +240,55 @@ services:
       - db-lb
       - redis
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: suitecrm_user
+      RABBITMQ_DEFAULT_PASS: suitecrm_pass
+      RABBITMQ_DEFAULT_VHOST: suitecrm_vhost
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.30
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.35
+    restart: unless-stopped
+
+  consumer:
+    build: ./consumer
+    container_name: consumer
+    environment:
+      RABBITMQ_HOST: 192.168.2.30
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: suitecrm_user
+      RABBITMQ_PASS: suitecrm_pass
+      RABBITMQ_VHOST: suitecrm_vhost
+      SMTP_HOST: 192.168.2.35
+      SMTP_PORT: 1025
+      SMTP_FROM: no-reply@suitecrm.com
+    depends_on:
+      - rabbitmq
+      - mailhog
+    networks:
+      internal_net:
+        ipv4_address: 192.168.2.36
+    restart: unless-stopped
+
+
 networks:
   dmz_net:
     name: dmz_net
@@ -271,3 +320,4 @@ volumes:
   redis_data:
   suitecrm_clientea_app:
   suitecrm_clienteb_app:
+  rabbitmq_data:
