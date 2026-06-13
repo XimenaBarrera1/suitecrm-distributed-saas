@@ -258,17 +258,6 @@ services:
         ipv4_address: 192.168.2.30
     restart: unless-stopped
 
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: mailhog
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-    networks:
-      internal_net:
-        ipv4_address: 192.168.2.35
-    restart: unless-stopped
-
   consumer:
     build: ./consumer
     container_name: consumer
@@ -288,7 +277,6 @@ services:
       SMTP_PASS: ${SMTP_PASS}
     depends_on:
       - rabbitmq
-      - mailhog
     networks:
       internal_net:
         ipv4_address: 192.168.2.36
