@@ -13,7 +13,8 @@ wsrep_node_name=db-node-3
 
 wsrep_sst_method=rsync
 
-wsrep_provider_options="gmcast.listen_addr=tcp://0.0.0.0:4567"
+wsrep_provider_options="gmcast.listen_addr=tcp://0.0.0.0:4567;pc.recovery=TRUE"
+
 
 binlog_format=ROW
 default_storage_engine=InnoDB
