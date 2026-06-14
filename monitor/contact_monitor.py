@@ -8,12 +8,14 @@ import os
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Configuración de la base de datos (usando el balanceador db-lb)
-DB_CONFIG = {
+# Lista de tenants (bases de datos a monitorear)
+TENANTS = ['suitecrm_clientea', 'suitecrm_clienteb']
+
+# Configuración base de la base de datos
+DB_CONFIG_BASE = {
     'host': 'db-lb',
     'user': 'suitecrm_user',
     'password': 'suitecrm_pass',
-    'database': 'suitecrm_clientea',
     'port': 3306
 }
 
@@ -51,11 +53,12 @@ def connect_rabbitmq():
     )
     return pika.BlockingConnection(parameters)
 
-def publish_event(record, event_type):
+def publish_event(record, event_type, tenant):
     """
     Publica un evento en RabbitMQ.
-    - record: diccionario con los datos del registro (contacto o campaña)
+    - record: diccionario con los datos del registro
     - event_type: 'contacto_creado' o 'campaña_creada'
+    - tenant: Nombre de la base de datos origen
     """
     try:
         connection = connect_rabbitmq()
@@ -68,7 +71,8 @@ def publish_event(record, event_type):
                 'id': record['id'],
                 'nombre': f"{record.get('first_name', '')} {record.get('last_name', '')}".strip(),
                 'email': record.get('email', ''),
-                'fecha_creacion': str(record['date_entered'])
+                'fecha_creacion': str(record['date_entered']),
+                'tenant': tenant
             })
             routing_key = 'contacto.creado'
             log_name = record.get('first_name', '') + ' ' + record.get('last_name', '')
@@ -78,7 +82,8 @@ def publish_event(record, event_type):
                 'id': record['id'],
                 'nombre': record.get('name', ''),
                 'email': record.get('user_email', ''),   # email del usuario asignado
-                'fecha_creacion': str(record['date_entered'])
+                'fecha_creacion': str(record['date_entered']),
+                'tenant': tenant
             })
             routing_key = 'campaña.creada'
             log_name = record.get('name', '')
@@ -86,15 +91,17 @@ def publish_event(record, event_type):
             return
 
         channel.basic_publish(exchange=RABBIT_CONFIG['exchange'], routing_key=routing_key, body=message)
-        logging.info(f"Publicado {event_type}: {log_name} (ID: {record['id']})")
+        logging.info(f"Publicado {event_type} ({tenant}): {log_name} (ID: {record['id']})")
         connection.close()
     except Exception as e:
-        logging.error(f"Error publicando evento {event_type}: {e}")
+        logging.error(f"Error publicando evento {event_type} en {tenant}: {e}")
 
-# --- Consultas a la base de datos ---
-def fetch_all_contacts():
+# --- Consultas a la base de datos (con tenant dinámico) ---
+def fetch_all_contacts(tenant_db):
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        db_config = DB_CONFIG_BASE.copy()
+        db_config['database'] = tenant_db
+        conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         query = """
             SELECT c.id, c.first_name, c.last_name, c.date_entered,
@@ -110,12 +117,14 @@ def fetch_all_contacts():
         conn.close()
         return contacts
     except Exception as e:
-        logging.error(f"Error consultando contactos: {e}")
+        logging.error(f"Error consultando contactos en {tenant_db}: {e}")
         return []
 
-def fetch_all_campaigns():
+def fetch_all_campaigns(tenant_db):
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        db_config = DB_CONFIG_BASE.copy()
+        db_config['database'] = tenant_db
+        conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         query = """
             SELECT c.id, c.name, c.date_entered,
@@ -132,7 +141,7 @@ def fetch_all_campaigns():
         conn.close()
         return campaigns
     except Exception as e:
-        logging.error(f"Error consultando campañas: {e}")
+        logging.error(f"Error consultando campañas en {tenant_db}: {e}")
         return []
 
 def main():
@@ -141,31 +150,35 @@ def main():
 
     while True:
         try:
-            # --- Monitoreo de contactos ---
-            contacts = fetch_all_contacts()
-            new_contacts = 0
-            for contact in contacts:
-                if contact['id'] not in processed:
-                    publish_event(contact, 'contacto_creado')
-                    processed.add(contact['id'])
-                    new_contacts += 1
+            new_contacts_total = 0
+            new_campaigns_total = 0
 
-            # --- Monitoreo de campañas ---
-            campaigns = fetch_all_campaigns()
-            new_campaigns = 0
-            for campaign in campaigns:
-                if campaign['id'] not in processed:
-                    publish_event(campaign, 'campaña_creada')
-                    processed.add(campaign['id'])
-                    new_campaigns += 1
+            # Iteramos sobre todos los tenants (Cliente A y Cliente B)
+            for tenant in TENANTS:
+                # --- Monitoreo de contactos ---
+                contacts = fetch_all_contacts(tenant)
+                for contact in contacts:
+                    if contact['id'] not in processed:
+                        publish_event(contact, 'contacto_creado', tenant)
+                        processed.add(contact['id'])
+                        new_contacts_total += 1
+
+                # --- Monitoreo de campañas ---
+                campaigns = fetch_all_campaigns(tenant)
+                for campaign in campaigns:
+                    if campaign['id'] not in processed:
+                        publish_event(campaign, 'campaña_creada', tenant)
+                        processed.add(campaign['id'])
+                        new_campaigns_total += 1
 
             # Guardar el conjunto actualizado si hubo novedades
-            if new_contacts or new_campaigns:
+            if new_contacts_total or new_campaigns_total:
                 save_processed_ids(processed)
-                logging.info(f"Procesados: {new_contacts} nuevos contactos, {new_campaigns} nuevas campañas. Total en historial: {len(processed)}")
+                logging.info(f"Procesados globalmente: {new_contacts_total} nuevos contactos, {new_campaigns_total} nuevas campañas. Total en historial: {len(processed)}")
 
         except Exception as e:
             logging.error(f"Error en ciclo principal: {e}")
+            
         time.sleep(5)   # Espera 5 segundos antes de la siguiente iteración
 
 if __name__ == "__main__":
