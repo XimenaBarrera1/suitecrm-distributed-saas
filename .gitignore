@@ -1,5 +1,10 @@
 .env
+
+dns/zones/db.clientea.com
+dns/zones/db.clienteb.com
+
 *.log
 *.tmp
 .DS_Store
 .vscode/
+*.bak
